@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Card BIN Template Generator</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f6f7f9;
+    color: #1a1a1a;
+    padding: 24px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+  .sub {
+    color: #6b7280;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    background: #eef2ff;
+    color: #4f46e5;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1.2fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+  }
+  textarea {
+    resize: vertical;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    min-height: 90px;
+  }
+  button {
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #4f46e5;
+    color: #fff;
+    transition: background .15s;
+  }
+  button:hover { background: #4338ca; }
+  button.secondary {
+    background: #fff;
+    color: #374151;
+    border-color: #d1d5db;
+  }
+  button.secondary:hover { background: #f9fafb; }
+  button.danger {
+    background: #fff;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+  button.danger:hover { background: #fef2f2; }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 16px;
+  }
+  .tab {
+    padding: 8px 14px;
+    background: transparent;
+    color: #6b7280;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    background: #f9fafb;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    white-space: nowrap;
+  }
+  td.text { font-family: inherit; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbff; }
+  .empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+  }
+  .scheme-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: -apple-system, sans-serif;
+  }
+  .scheme-VISA { background: #dbeafe; color: #1e40af; }
+  .scheme-MasterCard { background: #fef3c7; color: #92400e; }
+  .scheme-UnionPayIntl { background: #dcfce7; color: #166534; }
+  .scheme-JCB { background: #f3e8ff; color: #6b21a8; }
+  .scheme-DinersClub { background: #fee2e2; color: #991b1b; }
+  .scheme-AmericanExpress { background: #e0e7ff; color: #3730a3; }
+  .scheme-Unknown { background: #f3f4f6; color: #6b7280; }
+  .error-cell { color: #dc2626; font-style: italic; }
+  .stats {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #6b7280;
+    padding: 8px 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 12px;
+  }
+  .stats b { color: #111827; font-weight: 600; }
+  .help {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #111827;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .actions-col { text-align: center; }
+  .icon-btn {
+    background: transparent;
+    color: #6b7280;
+    padding: 4px 8px;
+    border: none;
+    font-size: 14px;
+  }
+  .icon-btn:hover { background: #f3f4f6; color: #dc2626; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Card BIN Template Generator</h1>
+  <div class="sub">输入 Bank / BIN / Type / Country，自动计算 Scheme、Digits、Start、End、Bin Range</div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-tab="single">单条录入</button>
+      <button class="tab" data-tab="batch">批量粘贴</button>
+      <button class="tab" data-tab="rules">规则说明</button>
+    </div>
+
+    <div class="tab-content active" id="tab-single">
+      <div class="row">
+        <div>
+          <label>Bank</label>
+          <input id="in-bank" placeholder="如 DBS/POSB" />
+        </div>
+        <div>
+          <label>BIN (6-9 位)</label>
+          <input id="in-bin" placeholder="如 411911" maxlength="9" />
+        </div>
+        <div>
+          <label>Type</label>
+          <select id="in-type">
+            <option value="">（不填为空）</option>
+            <option value="Credit">Credit</option>
+            <option value="Debit">Debit</option>
+          </select>
+        </div>
+        <div>
+          <label>Country</label>
+          <select id="in-country">
+            <option value="">（请选择）</option>
+            <option value="Singapore">Singapore</option>
+            <option value="Malaysia">Malaysia</option>
+            <option value="Indonesia">Indonesia</option>
+            <option value="Thailand">Thailand</option>
+            <option value="Philippines">Philippines</option>
+            <option value="Vietnam">Vietnam</option>
+            <option value="Hong Kong">Hong Kong</option>
+            <option value="Taiwan">Taiwan</option>
+            <option value="Japan">Japan</option>
+            <option value="South Korea">South Korea</option>
+            <option value="Australia">Australia</option>
+          </select>
+        </div>
+        <div>
+          <button id="btn-add">添加</button>
+        </div>
+      </div>
+      <div class="help">回车键快速添加。Bank / Country 会记住最后一次输入。</div>
+    </div>
+
+    <div class="tab-content" id="tab-batch">
+      <label>粘贴数据 — 每行一条，支持 Tab / 逗号分隔，列顺序：Bank, BIN, Type, Country</label>
+      <textarea id="batch-text" placeholder="DBS/POSB&#9;411911&#9;Credit&#9;Singapore
+DBS/POSB&#9;425895&#9;Credit&#9;Singapore
+DBS/POSB&#9;377910&#9;Credit&#9;Singapore"></textarea>
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button id="btn-batch-add">批量添加</button>
+        <button class="secondary" id="btn-batch-replace">替换全部</button>
+      </div>
+      <div class="help">从 Excel / 表格中直接复制粘贴即可。也支持仅一列（BIN），Type/Country 留空。</div>
+    </div>
+
+    <div class="tab-content" id="tab-rules">
+      <div style="font-size:12.5px; line-height:1.75; color:#374151;">
+        <b>Scheme 判定（按 BIN 前缀）</b>
+        <ul style="margin:6px 0 12px 20px; padding:0;">
+          <li>首位 <code>4</code> → VISA</li>
+          <li>首位 <code>5</code> 或 <code>2</code> → MasterCard</li>
+          <li>前两位 <code>62</code> 或 <code>81</code> → UnionPayIntl</li>
+          <li>前两位 <code>35</code> → JCB</li>
+          <li>前两位 <code>36</code> → DinersClub（14 位）</li>
+          <li>前两位 <code>37</code> → AmericanExpress（15 位）</li>
+        </ul>
+        <b>Digits 卡号长度</b>
+        <ul style="margin:6px 0 12px 20px; padding:0;">
+          <li>AmEx (37) → 15 位；DinersClub (36) → 14 位；其他默认 16 位</li>
+        </ul>
+        <b>Start / End</b>
+        <div style="margin:6px 0 4px;">BIN 后补 0 到 Digits 长度 = Start；后补 9 = End。<br/>Bin Range = Start-End</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>结果 <span class="badge" id="count-badge">0 条</span></h2>
+    <div class="stats" id="stats" style="display:none;"></div>
+    <div class="toolbar">
+      <button id="btn-copy">复制表格</button>
+      <button class="secondary" id="btn-csv">导出 CSV</button>
+      <button class="secondary" id="btn-xlsx">导出 Excel (.xls)</button>
+      <button class="secondary" id="btn-json">导出 JSON</button>
+      <button class="danger" id="btn-clear" style="margin-left:auto;">清空</button>
+    </div>
+    <div class="table-wrap">
+      <table id="result-table">
+        <thead>
+          <tr>
+            <th>Bank</th>
+            <th>BIN</th>
+            <th>Type</th>
+            <th>Country</th>
+            <th>Scheme</th>
+            <th>Digits</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Bin Range</th>
+            <th class="actions-col">操作</th>
+          </tr>
+        </thead>
+        <tbody id="result-body"></tbody>
+      </table>
+      <div class="empty" id="empty-state">暂无数据 — 在上方录入或批量粘贴</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- 核心计算逻辑 ----------
+function detectScheme(bin) {
+  if (!bin) return "";
+  const b = String(bin);
+  const p1 = b.charAt(0);
+  const p2 = b.substring(0, 2);
+  if (p2 === "62" || p2 === "81") return "UnionPayIntl";
+  if (p2 === "35") return "JCB";
+  if (p2 === "36") return "DinersClub";
+  if (p2 === "37") return "AmericanExpress";
+  if (p1 === "4") return "VISA";
+  if (p1 === "5" || p1 === "2") return "MasterCard";
+  return "Unknown";
+}
+
+function detectDigits(bin) {
+  if (!bin) return 16;
+  const p2 = String(bin).substring(0, 2);
+  if (p2 === "37") return 15;
+  if (p2 === "36") return 14;
+  return 16;
+}
+
+function computeRow(bank, bin, type, country) {
+  bin = String(bin || "").trim();
+  const cleanBin = bin.replace(/\D/g, "");
+  const isValid = cleanBin.length >= 6 && cleanBin.length <= 9;
+  const scheme = detectScheme(cleanBin);
+  const digits = detectDigits(cleanBin);
+  let start = "", end = "", range = "";
+  if (isValid) {
+    const padLen = digits - cleanBin.length;
+    if (padLen >= 0) {
+      start = cleanBin + "0".repeat(padLen);
+      end = cleanBin + "9".repeat(padLen);
+      range = start + "-" + end;
+    }
+  }
+  return {
+    bank: (bank || "").trim(),
+    bin: cleanBin,
+    binRaw: bin,
+    type: (type || "").trim(),
+    country: (country || "").trim(),
+    scheme, digits, start, end, range,
+    valid: isValid && scheme !== "Unknown"
+  };
+}
+
+// ---------- 状态 ----------
+let rows = [];
+
+function render() {
+  const body = document.getElementById("result-body");
+  const empty = document.getElementById("empty-state");
+  const badge = document.getElementById("count-badge");
+  const stats = document.getElementById("stats");
+  badge.textContent = rows.length + " 条";
+  if (rows.length === 0) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    stats.style.display = "none";
+    return;
+  }
+  empty.style.display = "none";
+  // stats
+  const schemeCounts = {};
+  rows.forEach(r => { schemeCounts[r.scheme] = (schemeCounts[r.scheme] || 0) + 1; });
+  const parts = Object.entries(schemeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([s, c]) => `<span><b>${c}</b> ${s}</span>`);
+  stats.innerHTML = `<span>共 <b>${rows.length}</b> 条</span>` + parts.join("");
+  stats.style.display = "flex";
+
+  body.innerHTML = rows.map((r, i) => {
+    const schemeCls = "scheme-" + (r.scheme || "Unknown").replace(/\s/g, "");
+    return `<tr>
+      <td class="text">${escapeHtml(r.bank)}</td>
+      <td>${escapeHtml(r.bin || r.binRaw)}</td>
+      <td class="text">${escapeHtml(r.type)}</td>
+      <td class="text">${escapeHtml(r.country)}</td>
+      <td class="text">${r.scheme ? `<span class="scheme-badge ${schemeCls}">${r.scheme}</span>` : ""}</td>
+      <td>${r.digits}</td>
+      <td class="${r.start ? '' : 'error-cell'}">${r.start || 'BIN 无效'}</td>
+      <td class="${r.end ? '' : 'error-cell'}">${r.end || ''}</td>
+      <td>${r.range}</td>
+      <td class="actions-col"><button class="icon-btn" data-del="${i}" title="删除">×</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// ---------- 事件 ----------
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById("tab-" + t.dataset.tab).classList.add("active");
+  });
+});
+
+function addSingle() {
+  const bank = document.getElementById("in-bank").value;
+  const bin = document.getElementById("in-bin").value;
+  const type = document.getElementById("in-type").value;
+  const country = document.getElementById("in-country").value;
+  if (!bin.trim()) { toast("请输入 BIN"); return; }
+  const row = computeRow(bank, bin, type, country);
+  rows.push(row);
+  document.getElementById("in-bin").value = "";
+  document.getElementById("in-bin").focus();
+  render();
+  toast("已添加");
+}
+
+document.getElementById("btn-add").addEventListener("click", addSingle);
+["in-bank", "in-bin", "in-type", "in-country"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") addSingle();
+  });
+});
+
+function parseBatch(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.map(line => {
+    const parts = line.split(/[\t,]/).map(x => x.trim());
+    // Bank, BIN, Type, Country — if only 1 field, treat as BIN
+    if (parts.length === 1) return computeRow("", parts[0], "", "");
+    return computeRow(parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || "");
+  });
+}
+
+document.getElementById("btn-batch-add").addEventListener("click", () => {
+  const text = document.getElementById("batch-text").value;
+  if (!text.trim()) { toast("请粘贴数据"); return; }
+  const newRows = parseBatch(text);
+  rows = rows.concat(newRows);
+  render();
+  toast(`已添加 ${newRows.length} 条`);
+});
+
+document.getElementById("btn-batch-replace").addEventListener("click", () => {
+  const text = document.getElementById("batch-text").value;
+  if (!text.trim()) { toast("请粘贴数据"); return; }
+  rows = parseBatch(text);
+  render();
+  toast(`已替换为 ${rows.length} 条`);
+});
+
+document.getElementById("result-body").addEventListener("click", e => {
+  const idx = e.target.getAttribute("data-del");
+  if (idx !== null) {
+    rows.splice(parseInt(idx, 10), 1);
+    render();
+  }
+});
+
+document.getElementById("btn-clear").addEventListener("click", () => {
+  if (rows.length === 0) return;
+  if (confirm(`确认清空 ${rows.length} 条数据？`)) {
+    rows = [];
+    render();
+  }
+});
+
+// ---------- 导出 ----------
+const HEADERS = ["Bank", "BIN", "Type", "Country", "Scheme", "Digits", "Start", "End", "Bin Range"];
+function rowsAsMatrix() {
+  return rows.map(r => [r.bank, r.bin, r.type, r.country, r.scheme, r.digits, r.start, r.end, r.range]);
+}
+
+document.getElementById("btn-copy").addEventListener("click", async () => {
+  if (rows.length === 0) { toast("无数据"); return; }
+  const tsv = [HEADERS.join("\t")].concat(rowsAsMatrix().map(r => r.join("\t"))).join("\n");
+  try {
+    await navigator.clipboard.writeText(tsv);
+    toast("已复制到剪贴板（可粘贴到 Excel）");
+  } catch (e) {
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = tsv;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    toast("已复制");
+  }
+});
+
+function download(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById("btn-csv").addEventListener("click", () => {
+  if (rows.length === 0) { toast("无数据"); return; }
+  const csvEsc = v => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  // Columns that must stay as text in Excel (long digit strings → scientific notation otherwise).
+  // Indices: 1=BIN, 6=Start, 7=End, 8=Bin Range
+  const TEXT_COLS = new Set([1, 6, 7, 8]);
+  const asTextCell = v => {
+    const s = String(v ?? "");
+    if (!s) return "";
+    // Excel formula trick: ="12345..." forces text
+    return `="${s.replace(/"/g, '""')}"`;
+  };
+  const csv = [HEADERS.map(csvEsc).join(",")]
+    .concat(rowsAsMatrix().map(r => r.map((c, i) => TEXT_COLS.has(i) ? asTextCell(c) : csvEsc(c)).join(",")))
+    .join("\n");
+  // BOM for Excel Chinese
+  download("card_bin_" + Date.now() + ".csv", "﻿" + csv, "text/csv;charset=utf-8;");
+  toast("CSV 已下载");
+});
+
+document.getElementById("btn-xlsx").addEventListener("click", () => {
+  if (rows.length === 0) { toast("无数据"); return; }
+  // Simple HTML → Excel (.xls). BIN/Start/End/Range as text to preserve leading zeros and avoid scientific notation.
+  const th = HEADERS.map(h => `<th>${h}</th>`).join("");
+  const trs = rows.map(r => {
+    const cells = [r.bank, r.bin, r.type, r.country, r.scheme, r.digits, r.start, r.end, r.range];
+    return "<tr>" + cells.map((c, i) => {
+      const isNumericCol = i === 5; // Digits — the only real number column
+      const style = isNumericCol ? "" : ' style="mso-number-format:\'\\@\';"';
+      return `<td${style}>${escapeHtml(c)}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>BIN</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table border="1"><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table></body></html>`;
+  download("card_bin_" + Date.now() + ".xls", html, "application/vnd.ms-excel");
+  toast("Excel 已下载");
+});
+
+document.getElementById("btn-json").addEventListener("click", () => {
+  if (rows.length === 0) { toast("无数据"); return; }
+  const data = rows.map(r => ({
+    bank: r.bank, bin: r.bin, type: r.type, country: r.country,
+    scheme: r.scheme, digits: r.digits,
+    start: r.start, end: r.end, binRange: r.range
+  }));
+  download("card_bin_" + Date.now() + ".json", JSON.stringify(data, null, 2), "application/json");
+  toast("JSON 已下载");
+});
+
+// ---------- 示例数据（首次加载） ----------
+(function initDemo() {
+  const demo = [
+    ["DBS/POSB", "411911", "Credit", "Singapore"],
+    ["DBS/POSB", "552038", "Credit", "Singapore"],
+    ["DBS/POSB", "377910", "Credit", "Singapore"],
+  ];
+  rows = demo.map(d => computeRow(d[0], d[1], d[2], d[3]));
+  render();
+})();
+</script>
+</body>
+</html>
