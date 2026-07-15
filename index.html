@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Card BIN Template Generator</title>
+<title>Card BIN List Generator</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -234,18 +235,79 @@
     font-size: 14px;
   }
   .icon-btn:hover { background: #f3f4f6; color: #dc2626; }
+  .search-row {
+    display: grid;
+    grid-template-columns: 1.4fr 0.9fr 0.9fr 1.1fr 1.1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Card BIN Template Generator</h1>
+  <h1>Card BIN List Generator</h1>
   <div class="sub">输入 Bank / BIN / Type / Country，自动计算 Scheme、Digits、Start、End、Bin Range</div>
 
   <div class="card">
     <div class="tabs">
       <button class="tab active" data-tab="single">单条录入</button>
       <button class="tab" data-tab="batch">批量粘贴</button>
+      <button class="tab" data-tab="search">搜索 <span class="badge" id="lib-count" style="background:#f3f4f6;color:#6b7280;font-size:10px;padding:1px 6px;">0</span></button>
       <button class="tab" data-tab="rules">规则说明</button>
+    </div>
+
+    <div class="tab-content" id="tab-search">
+      <div class="search-row">
+        <div>
+          <label>Bank <span style="color:#9ca3af;font-weight:400;">（模糊匹配）</span></label>
+          <input id="f-bank" placeholder="如 Citi" />
+        </div>
+        <div>
+          <label>BIN</label>
+          <input id="f-bin" placeholder="如 411911" maxlength="9" />
+        </div>
+        <div>
+          <label>Type</label>
+          <select id="f-type">
+            <option value="">全部</option>
+            <option value="Credit">Credit</option>
+            <option value="Debit">Debit</option>
+          </select>
+        </div>
+        <div>
+          <label>Country</label>
+          <select id="f-country">
+            <option value="">全部</option>
+          </select>
+        </div>
+        <div>
+          <label>Scheme</label>
+          <select id="f-scheme">
+            <option value="">全部</option>
+            <option value="VISA">VISA</option>
+            <option value="MasterCard">MasterCard</option>
+            <option value="UnionPayIntl">UnionPayIntl</option>
+            <option value="JCB">JCB</option>
+            <option value="DinersClub">DinersClub</option>
+            <option value="AmericanExpress">AmericanExpress</option>
+          </select>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:6px;">
+            <button id="btn-search">搜索</button>
+            <button class="secondary" id="btn-search-reset">重置</button>
+          </div>
+        </div>
+      </div>
+      <div class="help" id="search-hint">输入任意条件后搜索，支持 Bank 模糊匹配。结果会出现在下方「结果」表格中。</div>
+      <div style="margin-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <label style="margin:0;">导入 xlsx：</label>
+        <input type="file" id="xlsx-import" accept=".xlsx,.xls" style="font-size:12px;" />
+        <button class="secondary" id="btn-import-append">追加到库</button>
+        <button class="secondary" id="btn-import-replace">替换库</button>
+        <span class="help" style="margin:0;">列顺序：Bank, BIN, Type, Country（自动跳过头行/说明行）</span>
+      </div>
     </div>
 
     <div class="tab-content active" id="tab-single">
@@ -342,9 +404,6 @@ DBS/POSB&#9;377910&#9;Credit&#9;Singapore"></textarea>
             <th>Type</th>
             <th>Country</th>
             <th>Scheme</th>
-            <th>Digits</th>
-            <th>Start</th>
-            <th>End</th>
             <th>Bin Range</th>
             <th class="actions-col">操作</th>
           </tr>
@@ -441,9 +500,6 @@ function render() {
       <td class="text">${escapeHtml(r.type)}</td>
       <td class="text">${escapeHtml(r.country)}</td>
       <td class="text">${r.scheme ? `<span class="scheme-badge ${schemeCls}">${r.scheme}</span>` : ""}</td>
-      <td>${r.digits}</td>
-      <td class="${r.start ? '' : 'error-cell'}">${r.start || 'BIN 无效'}</td>
-      <td class="${r.end ? '' : 'error-cell'}">${r.end || ''}</td>
       <td>${r.range}</td>
       <td class="actions-col"><button class="icon-btn" data-del="${i}" title="删除">×</button></td>
     </tr>`;
@@ -539,9 +595,9 @@ document.getElementById("btn-clear").addEventListener("click", () => {
 });
 
 // ---------- 导出 ----------
-const HEADERS = ["Bank", "BIN", "Type", "Country", "Scheme", "Digits", "Start", "End", "Bin Range"];
+const HEADERS = ["Bank", "BIN", "Type", "Country", "Scheme", "Bin Range"];
 function rowsAsMatrix() {
-  return rows.map(r => [r.bank, r.bin, r.type, r.country, r.scheme, r.digits, r.start, r.end, r.range]);
+  return rows.map(r => [r.bank, r.bin, r.type, r.country, r.scheme, r.range]);
 }
 
 document.getElementById("btn-copy").addEventListener("click", async () => {
@@ -581,8 +637,8 @@ document.getElementById("btn-csv").addEventListener("click", () => {
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   // Columns that must stay as text in Excel (long digit strings → scientific notation otherwise).
-  // Indices: 1=BIN, 6=Start, 7=End, 8=Bin Range
-  const TEXT_COLS = new Set([1, 6, 7, 8]);
+  // Indices: 1=BIN, 5=Bin Range
+  const TEXT_COLS = new Set([1, 5]);
   const asTextCell = v => {
     const s = String(v ?? "");
     if (!s) return "";
@@ -599,12 +655,12 @@ document.getElementById("btn-csv").addEventListener("click", () => {
 
 document.getElementById("btn-xlsx").addEventListener("click", () => {
   if (rows.length === 0) { toast("无数据"); return; }
-  // Simple HTML → Excel (.xls). BIN/Start/End/Range as text to preserve leading zeros and avoid scientific notation.
+  // Simple HTML → Excel (.xls). BIN/Range as text to avoid scientific notation.
   const th = HEADERS.map(h => `<th>${h}</th>`).join("");
   const trs = rows.map(r => {
-    const cells = [r.bank, r.bin, r.type, r.country, r.scheme, r.digits, r.start, r.end, r.range];
+    const cells = [r.bank, r.bin, r.type, r.country, r.scheme, r.range];
     return "<tr>" + cells.map((c, i) => {
-      const isNumericCol = i === 5; // Digits — the only real number column
+      const isNumericCol = false; // Digits column removed — all columns are text
       const style = isNumericCol ? "" : ' style="mso-number-format:\'\\@\';"';
       return `<td${style}>${escapeHtml(c)}</td>`;
     }).join("") + "</tr>";
@@ -618,14 +674,601 @@ document.getElementById("btn-json").addEventListener("click", () => {
   if (rows.length === 0) { toast("无数据"); return; }
   const data = rows.map(r => ({
     bank: r.bank, bin: r.bin, type: r.type, country: r.country,
-    scheme: r.scheme, digits: r.digits,
-    start: r.start, end: r.end, binRange: r.range
+    scheme: r.scheme, binRange: r.range
   }));
   download("card_bin_" + Date.now() + ".json", JSON.stringify(data, null, 2), "application/json");
   toast("JSON 已下载");
 });
 
-// ---------- 示例数据（首次加载） ----------
+// ---------- 内置 BIN 数据库 ----------
+const BIN_LIB = [
+  ["CIMB", "532357", "Credit", "Singapore"],
+  ["CIMB", "554939", "Credit", "Singapore"],
+  ["CIMB", "545234", "Credit", "Singapore"],
+  ["CIMB", "467871", "Credit", "Singapore"],
+  ["CIMB", "467870", "Credit", "Singapore"],
+  ["Citibank", "540188", "Credit", "Singapore"],
+  ["Citibank", "559731", "Debit", "Singapore"],
+  ["Citibank", "559732", "Debit", "Singapore"],
+  ["Citibank", "559733", "Debit", "Singapore"],
+  ["Citibank", "559734", "Debit", "Singapore"],
+  ["Citibank", "559842", "Debit", "Singapore"],
+  ["Citibank", "559862", "Debit", "Singapore"],
+  ["Citibank", "520903", "Debit", "Singapore"],
+  ["Citibank", "521393", "Debit", "Singapore"],
+  ["Citibank", "521503", "Debit", "Singapore"],
+  ["Citibank", "528786", "Debit", "Singapore"],
+  ["Citibank", "552777", "Credit", "Singapore"],
+  ["Citibank", "522274", "Credit", "Singapore"],
+  ["Citibank", "542550", "Credit", "Singapore"],
+  ["Citibank", "454750", "Credit", "Singapore"],
+  ["Citibank", "414746", "Credit", "Singapore"],
+  ["Citibank", "440437", "Credit", "Singapore"],
+  ["Citibank", "454415", "Credit", "Singapore"],
+  ["Citibank", "426569", "Credit", "Singapore"],
+  ["Citibank", "454416", "Credit", "Singapore"],
+  ["Citibank", "405682", "Credit", "Singapore"],
+  ["Citibank", "456881", "Credit", "Singapore"],
+  ["DBS/POSB", "411911", "Credit", "Singapore"],
+  ["DBS/POSB", "425895", "Credit", "Singapore"],
+  ["DBS/POSB", "455621", "Credit", "Singapore"],
+  ["DBS/POSB", "455622", "Credit", "Singapore"],
+  ["DBS/POSB", "552038", "Credit", "Singapore"],
+  ["DBS/POSB", "540042", "Credit", "Singapore"],
+  ["DBS/POSB", "542089", "Credit", "Singapore"],
+  ["DBS/POSB", "377910", "Credit", "Singapore"],
+  ["DBS/POSB", "554827", "Debit", "Singapore"],
+  ["DBS/POSB", "526471", "Debit", "Singapore"],
+  ["DBS/POSB", "554797", "Debit", "Singapore"],
+  ["DBS/POSB", "428425", "Debit", "Singapore"],
+  ["DBS/POSB", "462845", "Debit", "Singapore"],
+  ["DBS/POSB", "377911", "Credit", "Singapore"],
+  ["HSBC", "436324", "Credit", "Singapore"],
+  ["HSBC", "483585", "Credit", "Singapore"],
+  ["HSBC", "451297", "Credit", "Singapore"],
+  ["HSBC", "496645", "Credit", "Singapore"],
+  ["HSBC", "492160", "Credit", "Singapore"],
+  ["HSBC", "455228", "Credit", "Singapore"],
+  ["HSBC", "455227", "Credit", "Singapore"],
+  ["HSBC Premier", "512043", "Credit", "Singapore"],
+  ["HSBC", "541287", "Credit", "Singapore"],
+  ["HSBC", "544234", "Credit", "Singapore"],
+  ["HSBC Premier", "539700", "Credit", "Singapore"],
+  ["HSBC", "489085", "Credit", "Singapore"],
+  ["HSBC Premier", "543062", "Credit", "Singapore"],
+  ["HSBC TravelOne Credit", "525532", "Credit", "Singapore"],
+  ["HSBC", "436326", "Debit", "Singapore"],
+  ["HSBC", "436327", "Debit", "Singapore"],
+  ["HSBC", "458557", "Debit", "Singapore"],
+  ["HSBC Premier", "458556", "Debit", "Singapore"],
+  ["HSBC", "458555", "Debit", "Singapore"],
+  ["HSBC Premier", "458558", "Debit", "Singapore"],
+  ["HSBC Premier", "472239", "Debit", "Singapore"],
+  ["OCBC", "400610", "Credit", "Singapore"],
+  ["OCBC", "421808", "Debit", "Singapore"],
+  ["OCBC", "450898", "Credit", "Singapore"],
+  ["OCBC", "452419", "Credit", "Singapore"],
+  ["OCBC", "496679", "Credit", "Singapore"],
+  ["OCBC", "524040", "Credit", "Singapore"],
+  ["OCBC", "540012", "Credit", "Singapore"],
+  ["OCBC", "541383", "Credit", "Singapore"],
+  ["OCBC", "541386", "Credit", "Singapore"],
+  ["OCBC", "557556", "Debit", "Singapore"],
+  ["OCBC", "400902", "Credit", "Singapore"],
+  ["OCBC", "558860", "Debit", "Singapore"],
+  ["OCBC", "552410", "Credit", "Singapore"],
+  ["OCBC", "483139", "Credit", "Singapore"],
+  ["SCB", "423179", "Credit", "Singapore"],
+  ["SCB", "430092", "Credit", "Singapore"],
+  ["SCB", "450873", "Credit", "Singapore"],
+  ["SCB", "450934", "Credit", "Singapore"],
+  ["SCB", "486418", "Credit", "Singapore"],
+  ["SCB", "486419", "Credit", "Singapore"],
+  ["SCB", "549834", "Credit", "Singapore"],
+  ["SCB", "514916", "Credit", "Singapore"],
+  ["SCB", "540275", "Credit", "Singapore"],
+  ["SCB", "542113", "Credit", "Singapore"],
+  ["SCB", "553402", "Credit", "Singapore"],
+  ["Trustbank Debit", "417971", "Debit", "Singapore"],
+  ["Unionpay", "620094", "", "Singapore"],
+  ["Unionpay", "620186", "", "Singapore"],
+  ["Unionpay", "621052", "", "Singapore"],
+  ["Unionpay", "621719", "Debit", "Singapore"],
+  ["Unionpay", "621765", "Debit", "Singapore"],
+  ["Unionpay", "622158", "", "Singapore"],
+  ["Unionpay", "622789", "Credit", "Singapore"],
+  ["Unionpay", "622790", "", "Singapore"],
+  ["Unionpay", "622934", "Debit", "Singapore"],
+  ["Unionpay", "622964", "Debit", "Singapore"],
+  ["Unionpay", "623415", "Debit", "Singapore"],
+  ["Unionpay", "624391", "Credit", "Singapore"],
+  ["Unionpay", "624405", "Credit", "Singapore"],
+  ["Unionpay", "624466", "", "Singapore"],
+  ["Unionpay", "625917", "Credit", "Singapore"],
+  ["Unionpay", "626285", "", "Singapore"],
+  ["Unionpay", "626296", "Credit", "Singapore"],
+  ["Unionpay", "626301", "Credit", "Singapore"],
+  ["Unionpay", "626309", "Credit", "Singapore"],
+  ["Unionpay", "626425", "Credit", "Singapore"],
+  ["Unionpay", "629110", "Debit", "Singapore"],
+  ["Unionpay", "629295", "", "Singapore"],
+  ["Unionpay", "815200", "", "Singapore"],
+  ["Unionpay", "622433", "Credit", "Singapore"],
+  ["Citibank", "54255033", "Credit", "Singapore"],
+  ["Citibank", "41474630", "Credit", "Singapore"],
+  ["YouTrip Debit", "516240", "Debit", "Singapore"],
+  ["UOB", "426588", "Credit", "Singapore"],
+  ["UOB", "418238", "Debit", "Singapore"],
+  ["UOB", "512972", "Debit", "Singapore"],
+  ["UOB", "622433", "Credit", "Singapore"],
+  ["UOB", "376317", "Credit", "Singapore"],
+  ["UOB", "486374", "Credit", "Singapore"],
+  ["UOB", "438202", "Debit", "Singapore"],
+  ["UOB", "400682", "Credit", "Singapore"],
+  ["UOB", "454182", "Credit", "Singapore"],
+  ["UOB", "454183", "Credit", "Singapore"],
+  ["UOB", "456598", "Credit", "Singapore"],
+  ["UOB", "541126", "Credit", "Singapore"],
+  ["UOB", "540191", "Credit", "Singapore"],
+  ["UOB", "552253", "Credit", "Singapore"],
+  ["UOB", "542125", "Credit", "Singapore"],
+  ["UOB", "552163", "Credit", "Singapore"],
+  ["UOB", "521118", "Debit", "Singapore"],
+  ["UOB", "512655", "Debit", "Singapore"],
+  ["UOB", "559221", "Debit", "Singapore"],
+  ["UOB", "515705", "Credit", "Singapore"],
+  ["UOB", "558957", "Credit", "Singapore"],
+  ["UOB", "552592", "Credit", "Singapore"],
+  ["UOB", "454718", "Credit", "Singapore"],
+  ["UOB", "540543", "Credit", "Singapore"],
+  ["UOB", "471542", "Credit", "Singapore"],
+  ["UOB", "407514", "Credit", "Singapore"],
+  ["UOB", "438213", "Credit", "Singapore"],
+  ["UOB", "494084", "Credit", "Singapore"],
+  ["UOB", "531218", "Credit", "Singapore"],
+  ["UOB", "531219", "Credit", "Singapore"],
+  ["UOB", "377149", "Credit", "Singapore"],
+  ["UOB", "519978", "Debit", "Singapore"],
+  ["UOB", "536260", "Credit", "Singapore"],
+  ["UOB", "536285", "", "Singapore"],
+  ["UOB", "536316", "Debit", "Singapore"],
+  ["UOB", "541129", "Credit", "Singapore"],
+  ["UOB", "548301", "Credit", "Singapore"],
+  ["EZLINK", "534972", "Debit", "Singapore"],
+  ["DBS Live Fresh Card", "41191100", "Credit", "Singapore"],
+  ["DBS Live Fresh Card", "41191101", "Credit", "Singapore"],
+  ["CIMB", "437599", "Credit", "Malaysia"],
+  ["CIMB", "451295", "Credit", "Malaysia"],
+  ["CIMB", "462889", "Credit", "Malaysia"],
+  ["CIMB", "479446", "Credit", "Malaysia"],
+  ["CIMB", "501855", "Debit", "Malaysia"],
+  ["CIMB", "515697", "Credit", "Malaysia"],
+  ["CIMB", "519603", "Debit", "Malaysia"],
+  ["CIMB", "521059", "Debit", "Malaysia"],
+  ["CIMB", "521395", "Credit", "Malaysia"],
+  ["CIMB", "526120", "Credit", "Malaysia"],
+  ["CIMB", "552115", "Credit", "Malaysia"],
+  ["CIMB", "552333", "Credit", "Malaysia"],
+  ["CIMB", "552334", "Credit", "Malaysia"],
+  ["CIMB", "557756", "Debit", "Malaysia"],
+  ["CIMB", "564158", "Debit", "Malaysia"],
+  ["CIMB", "55211527", "Credit", "Malaysia"],
+  ["CIMB", "55233300", "Credit", "Malaysia"],
+  ["CIMB", "52612000", "Credit", "Malaysia"],
+  ["PBB Credit", "559589", "Credit", "Malaysia"],
+  ["PBB Credit", "523938", "Credit", "Malaysia"],
+  ["PBB Credit", "537992", "Credit", "Malaysia"],
+  ["PBB Credit", "539172", "Credit", "Malaysia"],
+  ["Unionpay", "621764", "Debit", "Malaysia"],
+  ["Unionpay", "622964", "Debit", "Malaysia"],
+  ["Unionpay", "623488", "Debit", "Malaysia"],
+  ["Unionpay", "625829", "", "Malaysia"],
+  ["Unionpay", "625921", "Credit", "Malaysia"],
+  ["Unionpay", "625943", "", "Malaysia"],
+  ["Unionpay", "625945", "Credit", "Malaysia"],
+  ["Unionpay", "629110", "Debit", "Malaysia"],
+  ["Unionpay", "629152", "Debit", "Malaysia"],
+  ["Unionpay", "629236", "", "Malaysia"],
+  ["Unionpay", "629247", "Debit", "Malaysia"],
+  ["HSBC Premier", "512089", "Credit", "Malaysia"],
+  ["HSBC Premier", "549854", "Credit", "Malaysia"],
+  ["HSBC Premier", "543293", "Credit", "Malaysia"],
+  ["HSBC Mastercard", "527551", "Credit", "Malaysia"],
+  ["HSBC Mastercard", "540041", "Credit", "Malaysia"],
+  ["HSBC Mastercard", "541288", "Credit", "Malaysia"],
+  ["HSBC Visa", "438675", "Credit", "Malaysia"],
+  ["HSBC Visa", "436480", "Credit", "Malaysia"],
+  ["HSBC Visa", "453966", "Credit", "Malaysia"],
+  ["HSBC Visa", "492159", "Credit", "Malaysia"],
+  ["HSBC Visa", "461772", "Credit", "Malaysia"],
+  ["HSBC Visa", "462286", "Credit", "Malaysia"],
+  ["HSBC Visa", "436481", "Credit", "Malaysia"],
+  ["UOB", "414170", "Credit", "Malaysia"],
+  ["UOB", "437766", "Credit", "Malaysia"],
+  ["UOB", "438289", "Credit", "Malaysia"],
+  ["UOB", "438629", "Credit", "Malaysia"],
+  ["UOB", "459914", "Credit", "Malaysia"],
+  ["UOB", "522222", "Credit", "Malaysia"],
+  ["UOB", "543623", "Credit", "Malaysia"],
+  ["UOB", "552409", "Credit", "Malaysia"],
+  ["UOB", "519469", "Debit", "Malaysia"],
+  ["UOB", "491822", "Credit", "Malaysia"],
+  ["UOB", "430443", "Credit", "Malaysia"],
+  ["UOB", "558774", "Credit", "Malaysia"],
+  ["UOB", "558829", "Credit", "Malaysia"],
+  ["UOB", "459915", "Credit", "Malaysia"],
+  ["UOB", "552086", "Credit", "Malaysia"],
+  ["UOB", "552917", "Credit", "Malaysia"],
+  ["UOB", "464025", "Credit", "Malaysia"],
+  ["UOB", "405771", "Credit", "Malaysia"],
+  ["UOB", "425958", "Credit", "Malaysia"],
+  ["UOB", "432207", "Credit", "Malaysia"],
+  ["UOB", "436501", "Credit", "Malaysia"],
+  ["UOB", "438421", "Credit", "Malaysia"],
+  ["UOB", "438595", "Credit", "Malaysia"],
+  ["UOB", "456376", "Credit", "Malaysia"],
+  ["UOB", "456377", "Credit", "Malaysia"],
+  ["UOB", "464530", "Credit", "Malaysia"],
+  ["UOB", "464532", "Credit", "Malaysia"],
+  ["UOB", "464533", "Credit", "Malaysia"],
+  ["UOB", "473819", "Credit", "Malaysia"],
+  ["UOB", "490297", "Credit", "Malaysia"],
+  ["UOB", "516056", "Credit", "Malaysia"],
+  ["UOB", "518098", "Credit", "Malaysia"],
+  ["UOB", "518990", "Credit", "Malaysia"],
+  ["UOB", "521306", "Credit", "Malaysia"],
+  ["UOB", "523935", "Credit", "Malaysia"],
+  ["UOB", "525651", "Credit", "Malaysia"],
+  ["UOB", "526851", "Credit", "Malaysia"],
+  ["UOB", "526852", "Credit", "Malaysia"],
+  ["UOB", "526899", "Credit", "Malaysia"],
+  ["UOB", "540256", "Credit", "Malaysia"],
+  ["UOB", "543311", "Credit", "Malaysia"],
+  ["UOB", "552228", "Credit", "Malaysia"],
+  ["UOB", "529762", "Debit", "Malaysia"],
+  ["UOB", "559743", "Debit", "Malaysia"],
+  ["UOB", "559914", "Debit", "Malaysia"],
+  ["UOB", "405710", "", "Malaysia"],
+  ["UOB", "432202", "", "Malaysia"],
+  ["UOB", "432203", "", "Malaysia"],
+  ["UOB", "432204", "", "Malaysia"],
+  ["UOB", "432205", "", "Malaysia"],
+  ["UOB", "432206", "Credit", "Malaysia"],
+  ["UOB", "438598", "", "Malaysia"],
+  ["UOB", "517527", "", "Malaysia"],
+  ["UOB", "521190", "", "Malaysia"],
+  ["RHB Mastercard", "54006938", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006909", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006902", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011903", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51488260", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51488261", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51488262", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54660910", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006904", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006924", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006925", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006922", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011907", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011908", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006908", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011901", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011905", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006970", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006910", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006911", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006939", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54660911", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011900", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006900", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006901", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006903", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006936", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011904", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54011906", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006905", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006906", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51488263", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006923", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006921", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006907", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51571400", "Credit", "Malaysia"],
+  ["RHB Mastercard", "51571401", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54978211", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54978212", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54978216", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54978217", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54978226", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54006930", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006931", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006934", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006935", "Credit", "Malaysia"],
+  ["RHB Mastercard", "54006941", "Credit", "Malaysia"],
+  ["RHB Mastercard", "53610946", "Credit", "Malaysia"],
+  ["RHB Mastercard", "53610999", "Credit", "Malaysia"],
+  ["RHB Mastercard", "52904255", "Debit", "Malaysia"],
+  ["RHB Mastercard", "52904226", "Debit", "Malaysia"],
+  ["RHB Mastercard", "54006991", "Credit", "Malaysia"],
+  ["Maybank", "518757", "", "Malaysia"],
+  ["Maybank", "518834", "Credit", "Malaysia"],
+  ["Maybank", "552630", "Debit", "Malaysia"],
+  ["Maybank", "554704", "Credit", "Malaysia"],
+  ["Maybank", "469619", "Credit", "Malaysia"],
+  ["Maybank", "401636", "Credit", "Malaysia"],
+  ["Maybank", "496643", "Credit", "Malaysia"],
+  ["Maybank", "450667", "Credit", "Malaysia"],
+  ["Maybank", "498793", "Debit", "Malaysia"],
+  ["BNI", "519893", "Debit", "Indonesia"],
+  ["BNI", "532668", "Debit", "Indonesia"],
+  ["BNI", "526921", "Debit", "Indonesia"],
+  ["BNI", "537176", "Debit", "Indonesia"],
+  ["BNI", "517863", "Debit", "Indonesia"],
+  ["BNI", "517885", "Debit", "Indonesia"],
+  ["BNI", "517892", "Debit", "Indonesia"],
+  ["BNI", "526423", "Debit", "Indonesia"],
+  ["BNI", "526422", "Debit", "Indonesia"],
+  ["BNI", "222945", "Debit", "Indonesia"],
+  ["BNI", "356393", "Credit", "Indonesia"],
+  ["BNI", "356524", "Credit", "Indonesia"],
+  ["BNI", "356768", "Credit", "Indonesia"],
+  ["BNI", "370136", "Credit", "Indonesia"],
+  ["BNI", "379991", "Credit", "Indonesia"],
+  ["BNI", "410504", "Credit", "Indonesia"],
+  ["BNI", "410505", "Credit", "Indonesia"],
+  ["BNI", "451249", "Credit", "Indonesia"],
+  ["BNI", "490821", "Credit", "Indonesia"],
+  ["BNI", "510055", "Credit", "Indonesia"],
+  ["BNI", "517643", "Credit", "Indonesia"],
+  ["BNI", "522615", "Credit", "Indonesia"],
+  ["BNI", "522787", "Credit", "Indonesia"],
+  ["BNI", "523239", "Credit", "Indonesia"],
+  ["BNI", "523456", "Credit", "Indonesia"],
+  ["BNI", "524125", "Credit", "Indonesia"],
+  ["BNI", "524495", "Credit", "Indonesia"],
+  ["BNI", "538833", "Credit", "Indonesia"],
+  ["BNI", "542640", "Credit", "Indonesia"],
+  ["BNI", "548988", "Credit", "Indonesia"],
+  ["BNI", "426097", "Credit", "Indonesia"],
+  ["BNI", "426098", "Credit", "Indonesia"],
+  ["BNI", "450679", "Credit", "Indonesia"],
+  ["BNI", "450702", "Credit", "Indonesia"],
+  ["BNI", "457512", "Credit", "Indonesia"],
+  ["BNI", "466573", "Credit", "Indonesia"],
+  ["BNI", "466574", "Credit", "Indonesia"],
+  ["BNI", "471293", "Credit", "Indonesia"],
+  ["BNI", "523026", "Credit", "Indonesia"],
+  ["BNI", "524069", "Credit", "Indonesia"],
+  ["BNI", "524609", "Credit", "Indonesia"],
+  ["BNI", "548415", "Credit", "Indonesia"],
+  ["BNI", "439059", "Credit", "Indonesia"],
+  ["HSBC", "454493", "Credit", "Indonesia"],
+  ["HSBC", "518535", "Credit", "Indonesia"],
+  ["HSBC", "447211", "Credit", "Indonesia"],
+  ["HSBC", "518494", "Credit", "Indonesia"],
+  ["HSBC", "483574", "Credit", "Indonesia"],
+  ["HSBC", "483575", "Credit", "Indonesia"],
+  ["HSBC", "409675", "Credit", "Indonesia"],
+  ["HSBC", "403409", "Credit", "Indonesia"],
+  ["HSBC", "518323", "Credit", "Indonesia"],
+  ["DBS", "405542", "Credit", "Indonesia"],
+  ["DBS", "415735", "Credit", "Indonesia"],
+  ["DBS", "415736", "Credit", "Indonesia"],
+  ["DBS", "430981", "Credit", "Indonesia"],
+  ["DBS", "437450", "Credit", "Indonesia"],
+  ["DBS", "437456", "Credit", "Indonesia"],
+  ["DBS", "458769", "Credit", "Indonesia"],
+  ["DBS", "422143", "Credit", "Indonesia"],
+  ["DBS Vantage", "437451", "Credit", "Indonesia"],
+  ["DBS", "510217", "Credit", "Indonesia"],
+  ["DBS", "512021", "Credit", "Indonesia"],
+  ["DBS", "512422", "Credit", "Indonesia"],
+  ["DBS", "522846", "Credit", "Indonesia"],
+  ["DBS", "525644", "Credit", "Indonesia"],
+  ["DBS", "528912", "Credit", "Indonesia"],
+  ["DBS", "541069", "Credit", "Indonesia"],
+  ["DBS", "541070", "Credit", "Indonesia"],
+  ["DBS", "541616", "Credit", "Indonesia"],
+  ["Jenius", "466160", "Debit", "Indonesia"],
+  ["Jenius", "437896", "Credit", "Indonesia"],
+  ["Unionpay", "621240", "Debit", "Indonesia"],
+  ["Unionpay", "621248", "Debit", "Indonesia"],
+  ["Unionpay", "621445", "", "Indonesia"],
+  ["Unionpay", "621762", "", "Indonesia"],
+  ["Unionpay", "622171", "Credit", "Indonesia"],
+  ["Unionpay", "625918", "Credit", "Indonesia"],
+  ["Unionpay", "625931", "", "Indonesia"],
+  ["Unionpay", "626279", "Credit", "Indonesia"],
+  ["Allo Bank", "42930105", "Debit", "Indonesia"],
+  ["Bank Mega", "42019100", "Credit", "Indonesia"],
+  ["Bank Mega", "42019101", "Credit", "Indonesia"],
+  ["Bank Mega", "42019102", "Credit", "Indonesia"],
+  ["Bank Mega", "42019103", "Credit", "Indonesia"],
+  ["Bank Mega", "42019104", "Credit", "Indonesia"],
+  ["Bank Mega", "42019200", "Credit", "Indonesia"],
+  ["Bank Mega", "42019201", "Credit", "Indonesia"],
+  ["Bank Mega", "42019202", "Credit", "Indonesia"],
+  ["Bank Mega", "42019400", "Credit", "Indonesia"],
+  ["Bank Mega", "42019401", "Credit", "Indonesia"],
+  ["Bank Mega", "42019404", "Credit", "Indonesia"],
+  ["Bank Mega", "42621100", "Credit", "Indonesia"],
+  ["Bank Mega", "43122600", "Credit", "Indonesia"],
+  ["Bank Mega", "45878500", "Credit", "Indonesia"],
+  ["Bank Mega", "46493300", "Credit", "Indonesia"],
+  ["Bank Mega", "47143900", "Credit", "Indonesia"],
+  ["Bank Mega", "47267000", "Credit", "Indonesia"],
+  ["Bank Mega", "47848700", "Credit", "Indonesia"],
+  ["Bank Mega", "47848701", "Credit", "Indonesia"],
+  ["Bank Mega", "48908700", "Credit", "Indonesia"],
+  ["Bank Mega", "48908701", "Credit", "Indonesia"],
+  ["Bank Mandiri", "537793", "Credit", "Indonesia"],
+  ["Bank Mandiri", "536279", "Credit", "Indonesia"],
+  ["Bank Mandiri", "414931", "Credit", "Indonesia"],
+  ["Bank Mandiri", "425945", "Credit", "Indonesia"],
+  ["Bank Mandiri", "490284", "Credit", "Indonesia"],
+  ["Bank Mandiri", "490283", "Credit", "Indonesia"],
+  ["Bank Mandiri", "356350", "Credit", "Indonesia"],
+  ["Bank Mandiri", "479931", "Credit", "Indonesia"],
+  ["Bank Mandiri", "557338", "Credit", "Indonesia"],
+  ["Bank Mandiri", "445076", "Credit", "Indonesia"],
+  ["Bank Mandiri", "524325", "Credit", "Indonesia"],
+  ["Bank Mandiri", "413719", "Credit", "Indonesia"],
+  ["Bank Mandiri", "512676", "Credit", "Indonesia"],
+  ["Bank Mandiri", "413718", "Credit", "Indonesia"],
+  ["Bank Mandiri", "421313", "Credit", "Indonesia"],
+  ["Bank Mandiri", "55733808", "Credit", "Indonesia"],
+  ["Bank Mandiri", "55733888", "Credit", "Indonesia"],
+  ["UOB", "402736", "", "Indonesia"],
+  ["UOB", "414009", "Credit", "Indonesia"],
+  ["UOB", "421920", "Credit", "Indonesia"],
+  ["UOB", "425864", "Credit", "Indonesia"],
+  ["UOB", "454178", "Credit", "Indonesia"],
+  ["UOB", "454179", "Credit", "Indonesia"],
+  ["UOB", "461778", "Credit", "Indonesia"],
+  ["UOB", "472629", "Credit", "Indonesia"],
+  ["UOB", "512765", "", "Indonesia"],
+  ["UOB", "519311", "Credit", "Indonesia"],
+  ["UOB", "533672", "Credit", "Indonesia"],
+  ["UOB", "540184", "Credit", "Indonesia"],
+  ["UOB", "542177", "Credit", "Indonesia"],
+  ["UOB", "552042", "Credit", "Indonesia"],
+  ["UOB", "553388", "Credit", "Indonesia"],
+  ["UOB", "540579", "Credit", "Indonesia"],
+  ["UOB", "402695", "", "Indonesia"],
+  ["UOB", "486463", "Credit", "Indonesia"],
+  ["UOB", "486607", "Credit", "Indonesia"],
+  ["UOB", "461981", "", "Indonesia"],
+  ["BANK MEGA SYARIAH", "436306", "Credit", "Indonesia"],
+  ["BANK MEGA SYARIAH", "436304", "Credit", "Indonesia"],
+  ["BCA", "522990", "Credit", "Indonesia"],
+  ["BCA", "543248", "Credit", "Indonesia"],
+  ["Bank Mandiri", "461700", "Debit", "Indonesia"],
+  ["Bank Mandiri", "409873", "Debit", "Indonesia"],
+  ["Bank Mandiri", "461699", "Debit", "Indonesia"],
+];
+
+// 初始化搜索下拉
+(function initLib() {
+  document.getElementById("lib-count").textContent = BIN_LIB.length;
+  // 用 BIN_LIB 中的 country 动态填充 f-country 下拉（去重）
+  const countries = [...new Set(BIN_LIB.map(r => r[3]).filter(Boolean))].sort();
+  const sel = document.getElementById("f-country");
+  countries.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c; o.textContent = c;
+    sel.appendChild(o);
+  });
+})();
+
+function doSearch() {
+  const qBank = document.getElementById("f-bank").value.trim().toLowerCase();
+  const qBin = document.getElementById("f-bin").value.trim();
+  const qType = document.getElementById("f-type").value;
+  const qCountry = document.getElementById("f-country").value;
+  const qScheme = document.getElementById("f-scheme").value;
+
+  const filtered = BIN_LIB.filter(r => {
+    const [bank, bin, type, country] = r;
+    const scheme = detectScheme(bin);
+    if (qBank && !bank.toLowerCase().includes(qBank)) return false;
+    if (qBin && !bin.includes(qBin)) return false;
+    if (qType && type !== qType) return false;
+    if (qCountry && country !== qCountry) return false;
+    if (qScheme && scheme !== qScheme) return false;
+    return true;
+  }).map(r => computeRow(r[0], r[1], r[2], r[3]));
+
+  rows = filtered;
+  render();
+  const hint = document.getElementById("search-hint");
+  hint.textContent = filtered.length === 0
+    ? "未找到匹配记录"
+    : `找到 ${filtered.length} 条记录（已加载到结果表）`;
+}
+
+document.getElementById("btn-search").addEventListener("click", doSearch);
+["f-bank", "f-bin", "f-country", "f-type", "f-scheme"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+  });
+});
+document.getElementById("btn-search-reset").addEventListener("click", () => {
+  ["f-bank", "f-bin", "f-type", "f-country", "f-scheme"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.getElementById("search-hint").textContent = "输入任意条件后搜索，支持 Bank 模糊匹配。结果会出现在下方「结果」表格中。";
+});
+
+// ---------- xlsx 导入 ----------
+function parseXlsxRows(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  const entries = [];
+  for (const row of allRows) {
+    if (!row || row.length < 2) continue;
+    // 找到 BIN 列：至少有一个 cell 是纯 6-9 位数字
+    const binIdx = row.findIndex((c, i) => {
+      const s = String(c).replace(/\D/g, "");
+      return /^\d{6,9}$/.test(s) && i >= 1; // BIN 一般不在第 0 列
+    });
+    if (binIdx < 0) continue;
+    const bank = String(row[0] ?? "").trim();
+    const bin = String(row[binIdx]).replace(/\D/g, "");
+    const type = String(row[binIdx + 1] ?? "").trim();
+    const country = String(row[binIdx + 2] ?? "").trim();
+    // 只取合理行
+    if (bin.length < 6) continue;
+    entries.push([bank, bin, type, country]);
+  }
+  return entries;
+}
+
+let _pendingXlsx = null;
+document.getElementById("xlsx-import").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      _pendingXlsx = parseXlsxRows(ev.target.result);
+      toast(`已解析 ${_pendingXlsx.length} 条，点击「追加到库」或「替换库」`);
+    } catch (err) {
+      toast("xlsx 解析失败：" + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(f);
+});
+
+function refreshLib() {
+  document.getElementById("lib-count").textContent = BIN_LIB.length;
+  // 重建 country 下拉
+  const countries = [...new Set(BIN_LIB.map(r => r[3]).filter(Boolean))].sort();
+  const sel = document.getElementById("f-country");
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部</option>';
+  countries.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c; o.textContent = c;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+}
+
+document.getElementById("btn-import-append").addEventListener("click", () => {
+  if (!_pendingXlsx || !_pendingXlsx.length) { toast("请先选择 xlsx 文件"); return; }
+  BIN_LIB.push(..._pendingXlsx);
+  refreshLib();
+  toast(`追加 ${_pendingXlsx.length} 条，库共 ${BIN_LIB.length} 条`);
+});
+
+document.getElementById("btn-import-replace").addEventListener("click", () => {
+  if (!_pendingXlsx || !_pendingXlsx.length) { toast("请先选择 xlsx 文件"); return; }
+  if (!confirm(`确认替换？当前库 ${BIN_LIB.length} 条将被替换为 ${_pendingXlsx.length} 条`)) return;
+  BIN_LIB.length = 0;
+  BIN_LIB.push(..._pendingXlsx);
+  refreshLib();
+  toast(`已替换，库共 ${BIN_LIB.length} 条`);
+});
 (function initDemo() {
   const demo = [
     ["DBS/POSB", "411911", "Credit", "Singapore"],
