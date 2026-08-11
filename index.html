@@ -250,13 +250,13 @@
 
   <div class="card">
     <div class="tabs">
-      <button class="tab active" data-tab="single">单条录入</button>
+      <button class="tab active" data-tab="search">搜索 <span class="badge" id="lib-count" style="background:#f3f4f6;color:#6b7280;font-size:10px;padding:1px 6px;">0</span></button>
+      <button class="tab" data-tab="single">单条录入</button>
       <button class="tab" data-tab="batch">批量粘贴</button>
-      <button class="tab" data-tab="search">搜索 <span class="badge" id="lib-count" style="background:#f3f4f6;color:#6b7280;font-size:10px;padding:1px 6px;">0</span></button>
       <button class="tab" data-tab="rules">规则说明</button>
     </div>
 
-    <div class="tab-content" id="tab-search">
+    <div class="tab-content active" id="tab-search">
       <div class="search-row">
         <div>
           <label>Bank <span style="color:#9ca3af;font-weight:400;">（模糊匹配）</span></label>
@@ -310,7 +310,7 @@
       </div>
     </div>
 
-    <div class="tab-content active" id="tab-single">
+    <div class="tab-content" id="tab-single">
       <div class="row">
         <div>
           <label>Bank</label>
